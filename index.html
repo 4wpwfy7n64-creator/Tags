@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Exhibit Tag Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --panel: #ffffff;
+    --ink: #1d1d1b;
+    --muted: #6b6760;
+    --line: #d9d4cc;
+    --accent: #1d1d1b;
+    --warn: #b14a2a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  header {
+    padding: 14px 22px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0;
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header .spacer { flex: 1; }
+  header .tabs { display: flex; gap: 4px; }
+  header .tabs button {
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+    border-radius: 4px;
+  }
+  header .tabs button.active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+  main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+  }
+  .panel {
+    background: var(--panel);
+    overflow-y: auto;
+  }
+  .form-panel {
+    border-right: 1px solid var(--line);
+    padding: 18px 22px 80px;
+  }
+  .preview-panel {
+    padding: 22px;
+    background: var(--bg);
+    overflow: auto;
+  }
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 18px;
+  }
+  legend {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding: 0;
+    font-weight: 600;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .field { margin-bottom: 10px; }
+  input[type=text], input[type=url], textarea, select {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 7px 9px;
+    font: inherit;
+    font-size: 13px;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--ink);
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  .row { display: flex; gap: 8px; }
+  .row > .field { flex: 1; }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .check-row input { margin: 0; }
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .color-row input[type=color] {
+    width: 42px; height: 30px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 3px;
+  }
+  .swatches {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .swatches button {
+    width: 22px; height: 22px;
+    border: 1px solid rgba(0,0,0,0.15);
+    cursor: pointer; padding: 0;
+    border-radius: 3px;
+  }
+  .actions {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(to top, #fff 70%, rgba(255,255,255,0));
+    padding: 14px 22px;
+    margin: 0 -22px -80px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line);
+  }
+  button.primary, button.secondary, button.ghost {
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 3px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  button.secondary { background: #fff; color: var(--ink); }
+  button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
+  button:hover { opacity: 0.85; }
+  .preview-controls {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .preview-controls .seg {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .preview-controls .seg button {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--muted);
+    border-right: 1px solid var(--line);
+  }
+  .preview-controls .seg button:last-child { border-right: none; }
+  .preview-controls .seg button.active {
+    background: var(--ink);
+    color: #fff;
+  }
+  .stage {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 30px 10px;
+    background:
+      linear-gradient(45deg, #ebe7df 25%, transparent 25%),
+      linear-gradient(-45deg, #ebe7df 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ebe7df 75%),
+      linear-gradient(-45deg, transparent 75%, #ebe7df 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    border-radius: 4px;
+    min-height: 60vh;
+  }
+  /* ---- Tag rendering ---- */
+  .tag-1625 {
+    width: 1.625in;
+    height: 1.625in;
+    background: #fff;
+    color: #1d1d1b;
+    font-family: "Iowan Old Style", "Palatino Linotype", "Hoefler Text", "DejaVu Serif", Georgia, "Times New Roman", serif;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.18);
+    padding: 0.12in 0.1in 0.08in;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+  }
+  .tag-1625 .stripe {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 0.05in;
+    background: var(--accent);
+  }
+  .tag-1625 .name {
+    font-size: 11pt;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.005em;
+    margin-top: 0.05in;
+  }
+  .tag-1625 .name-2 {
+    font-size: 7.5pt;
+    font-style: italic;
+    color: #5a554d;
+    margin-top: 1px;
+    line-height: 1.05;
+  }
+  .tag-1625 .meta {
+    font-family: "Helvetica Neue", "Arial Narrow", "DejaVu Sans Condensed", Arial, sans-serif;
+    font-stretch: condensed;
+    font-size: 6.4pt;
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+    margin-top: 0.05in;
+    color: #2a2823;
+  }
+  .tag-1625 .meta div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .tag-1625 .qr {
+    position: absolute;
+    bottom: 0.06in; left: 0.06in;
+    width: 0.36in; height: 0.36in;
+  }
+  .tag-1625 .qr img, .tag-1625 .qr canvas {
+    width: 100%; height: 100%; display: block;
+  }
+  .tag-1625 .catalog {
+    position: absolute;
+    bottom: 0.06in; right: 0.07in;
+    font-family: "Helvetica Neue", "DejaVu Sans Condensed", Arial, sans-serif;
+    font-size: 6pt;
+    letter-spacing: 0.08em;
+    color: #4a463f;
+  }
+  .tag-1625.has-qr .meta { padding-bottom: 0.4in; }
+
+  /* Bilingual split for the small tag */
+  .tag-1625.bilingual { padding: 0.1in 0; }
+  .tag-1625.bilingual .stripe { height: 0.04in; }
+  .tag-1625.bilingual .split {
+    display: grid; grid-template-columns: 1fr 1px 1fr;
+    width: 100%; height: 100%;
+    align-items: center;
+  }
+  .tag-1625.bilingual .split .col {
+    padding: 0.05in 0.08in;
+    text-align: center;
+    height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .tag-1625.bilingual .split .divider {
+    background: var(--accent);
+    width: 1px; height: 70%;
+    align-self: center;
+    opacity: 0.5;
+  }
+  .tag-1625.bilingual .split .name { font-size: 9.5pt; }
+  .tag-1625.bilingual .split .meta { font-size: 5.6pt; margin-top: 0.04in; }
+
+  /* ---- Card 6x4 ---- */
+  .card-6x4 {
+    width: 6in;
+    height: 4in;
+    background: #fff;
+    color: #1d1d1b;
+    font-family: "Iowan Old Style", "Palatino Linotype", "Hoefler Text", "DejaVu Serif", Georgia, "Times New Roman", serif;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.18);
+    padding: 0.35in 0.4in 0.3in;
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: start;
+  }
+  .card-6x4.bilingual { grid-template-columns: 1fr 1fr; column-gap: 0.3in; }
+  .card-6x4.with-photo:not(.bilingual) {
+    grid-template-columns: 2.2in 1fr;
+    column-gap: 0.3in;
+  }
+  .card-6x4 .stripe-v {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 0.06in;
+    background: var(--accent);
+  }
+  .card-6x4 .photo-slot {
+    width: 100%;
+    aspect-ratio: 1/1;
+    background: #f0ece4;
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    grid-row: span 4;
+  }
+  .card-6x4 .photo-slot img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .card-6x4 .photo-slot .placeholder {
+    color: #b3aea3;
+    font-size: 9pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: -apple-system, sans-serif;
+  }
+  .card-6x4 .name {
+    font-size: 22pt;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.005em;
+    text-align: center;
+    margin-top: 0.1in;
+  }
+  .card-6x4 .name-2 {
+    font-size: 12pt;
+    font-style: italic;
+    color: #5a554d;
+    text-align: center;
+    margin-top: 4px;
+    line-height: 1.05;
+  }
+  .card-6x4 .accent-rule {
+    margin: 0.13in auto 0.13in;
+    width: 1.2in;
+    height: 1.2px;
+    background: var(--accent);
+    opacity: 0.7;
+  }
+  .card-6x4 .meta {
+    font-family: "Helvetica Neue", "DejaVu Sans Condensed", Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+    color: #2a2823;
+    text-align: center;
+  }
+  .card-6x4 .meta .row2 {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .card-6x4 .meta b {
+    font-weight: 600;
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #6b6760;
+  }
+  .card-6x4 .notes {
+    margin-top: 0.12in;
+    font-style: italic;
+    font-size: 9pt;
+    text-align: center;
+    color: #3a3730;
+    line-height: 1.3;
+  }
+  .card-6x4 .footer-row {
+    position: absolute;
+    bottom: 0.22in; left: 0.4in; right: 0.4in;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    font-family: "Helvetica Neue", "DejaVu Sans Condensed", Arial, sans-serif;
+    font-size: 8pt;
+    color: #6b6760;
+    letter-spacing: 0.06em;
+  }
+  .card-6x4 .footer-row .qr {
+    width: 0.7in; height: 0.7in;
+  }
+  .card-6x4 .footer-row .qr img, .card-6x4 .footer-row .qr canvas {
+    width: 100%; height: 100%; display: block;
+  }
+  .card-6x4.bilingual .col {
+    text-align: center;
+    border-right: 1px dashed transparent;
+  }
+  .card-6x4.bilingual .col:first-child {
+    border-right: 1px solid var(--accent);
+    padding-right: 0.15in;
+  }
+  .card-6x4.bilingual .col:last-child { padding-left: 0.15in; }
+
+  /* Sheet 6x4 with 3x2 grid of small tags (orientation: 6" wide x 4" tall) */
+  .sheet-6x4 {
+    width: 6in;
+    height: 4in;
+    background: #fff;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.18);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    position: relative;
+  }
+  .sheet-6x4 .cell {
+    display: flex; align-items: center; justify-content: center;
+    border: 1px dashed #d4ceb8;
+    position: relative;
+  }
+  .sheet-6x4 .tag-1625 {
+    box-shadow: none;
+    border: 1px solid #efece5;
+  }
+
+  /* Templates rendering modes */
+  .tpl-coin .name { letter-spacing: 0.04em; }
+  .tpl-sacred .name { font-style: italic; }
+  .tpl-militaria .name { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10pt; }
+  .tpl-militaria .meta { font-family: "Courier New", "DejaVu Sans Mono", monospace; font-size: 6pt; }
+
+  /* History */
+  .history-list { display: flex; flex-direction: column; gap: 4px; }
+  .history-list button {
+    text-align: left;
+    background: #faf8f3;
+    border: 1px solid var(--line);
+    padding: 6px 9px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+  .history-list button:hover { background: #f0ede4; }
+  .help { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .batch-area { display: none; }
+  .batch-area.active { display: block; }
+  .form-area.batch { display: none; }
+  body.batch-mode .batch-area { display: block; }
+  body.batch-mode .form-area { display: none; }
+  body.batch-mode .preview-stage-single { display: none; }
+  body.batch-mode .preview-stage-batch { display: block; }
+  .preview-stage-batch { display: none; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 4px 0; }
+  .photo-row { display: flex; align-items: center; gap: 8px; }
+  .photo-row .preview-thumb {
+    width: 44px; height: 44px;
+    background: #f0ece4;
+    border: 1px solid var(--line);
+    background-size: cover; background-position: center;
+    border-radius: 3px;
+  }
+  .photo-row label.btn {
+    display: inline-block;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 3px;
+  }
+  .photo-row input[type=file] { display: none; }
+  .toast {
+    position: fixed; top: 16px; right: 16px;
+    background: var(--ink); color: #fff;
+    padding: 10px 14px; border-radius: 4px;
+    font-size: 13px; z-index: 9999;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Exhibit Tag Generator</h1>
+  <div class="tabs" role="tablist">
+    <button id="tab-single" class="active" type="button">Single</button>
+    <button id="tab-batch" type="button">Batch (CSV)</button>
+  </div>
+  <div class="spacer"></div>
+  <div style="font-size:12px;color:var(--muted);">Print at 100% scale · 300 dpi</div>
+</header>
+
+<main>
+  <section class="panel form-panel">
+    <!-- Single form -->
+    <div class="form-area">
+      <fieldset>
+        <legend>Template</legend>
+        <div class="field">
+          <select id="template">
+            <option value="artifact">Artifact card (default)</option>
+            <option value="coin">Coin tag</option>
+            <option value="sacred">Sacred item (warm tone)</option>
+            <option value="militaria">Militaria</option>
+            <option value="custom">Custom (saved)</option>
+          </select>
+          <div class="help">Switching a template updates accent + defaults but keeps your data.</div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Item</legend>
+        <div class="field">
+          <label for="name">Item name (English)</label>
+          <input id="name" type="text" placeholder="e.g. Bronze trade weight">
+        </div>
+        <div class="field">
+          <label for="name2">Item name (secondary, optional)</label>
+          <input id="name2" type="text" placeholder="e.g. Гиря бронзовая">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="catalog">Catalog ID</label>
+            <input id="catalog" type="text" placeholder="MUR-2024.118">
+          </div>
+          <div class="field">
+            <label for="period">Date / period</label>
+            <input id="period" type="text" placeholder="c. 950–1050 CE">
+          </div>
+        </div>
+        <div class="field">
+          <label for="origin">Origin / provenance</label>
+          <input id="origin" type="text" placeholder="Volga Bulgar region, Russia">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="material">Material</label>
+            <input id="material" type="text" placeholder="Bronze">
+          </div>
+          <div class="field">
+            <label for="dimensions">Dimensions</label>
+            <input id="dimensions" type="text" placeholder="22 × 18 × 14 mm · 32 g">
+          </div>
+        </div>
+        <div class="field">
+          <label for="acquisition">Acquisition source</label>
+          <input id="acquisition" type="text" placeholder="Muratkin packet, 2024">
+        </div>
+        <div class="field">
+          <label for="notes">Notes</label>
+          <textarea id="notes" placeholder="Optional context, attribution, condition notes"></textarea>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Accent</legend>
+        <div class="color-row">
+          <input id="accent" type="color" value="#1d1d1b">
+          <div class="swatches" id="swatches">
+            <button type="button" data-c="#1d1d1b" style="background:#1d1d1b" title="Ink"></button>
+            <button type="button" data-c="#7a4a1f" style="background:#7a4a1f" title="Sienna"></button>
+            <button type="button" data-c="#b8860b" style="background:#b8860b" title="Amber"></button>
+            <button type="button" data-c="#556b2f" style="background:#556b2f" title="Olive"></button>
+            <button type="button" data-c="#2c3e50" style="background:#2c3e50" title="Slate"></button>
+            <button type="button" data-c="#8b1a1a" style="background:#8b1a1a" title="Brick"></button>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>QR code (optional)</legend>
+        <div class="field">
+          <label for="qr">Provenance URL</label>
+          <input id="qr" type="url" placeholder="https://archive.example.org/MUR-2024.118">
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Layout options</legend>
+        <div class="check-row">
+          <input id="bilingual" type="checkbox">
+          <label for="bilingual" style="margin:0">Bilingual mode (split vertically)</label>
+        </div>
+        <div class="check-row">
+          <input id="catalogCorner" type="checkbox" checked>
+          <label for="catalogCorner" style="margin:0">Catalog ID in bottom-right corner</label>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label>Item photo (6×4 card)</label>
+          <div class="photo-row">
+            <div class="preview-thumb" id="photoThumb"></div>
+            <label class="btn">
+              Choose…
+              <input id="photo" type="file" accept="image/*">
+            </label>
+            <button type="button" class="ghost" id="photoClear">Clear</button>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>History · last 5 entries</legend>
+        <div class="history-list" id="historyList"></div>
+        <div class="help">Auto-saved each time you generate. Click to reload.</div>
+      </fieldset>
+
+      <details>
+        <summary>Saved templates</summary>
+        <div style="margin-top:8px;">
+          <div class="row">
+            <div class="field">
+              <input id="tplName" type="text" placeholder="Template name">
+            </div>
+            <button type="button" class="secondary" id="tplSave">Save current as template</button>
+          </div>
+          <div class="history-list" id="tplList"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Batch CSV form -->
+    <div class="form-area batch">
+      <fieldset>
+        <legend>Batch input · CSV</legend>
+        <div class="help" style="margin-bottom:6px;">
+          Headers: <code>name, name2, catalog, period, origin, material, dimensions, acquisition, notes, qr</code>.
+          Paste from Excel/Numbers (tab-separated also works).
+        </div>
+        <textarea id="csv" rows="14" style="font-family:'SF Mono','DejaVu Sans Mono',Menlo,monospace;font-size:11px;" placeholder="name,catalog,period,origin,material,dimensions,acquisition,notes,qr&#10;Bronze trade weight,MUR-2024.118,c.950–1050 CE,Volga Bulgar,Bronze,22×18×14 mm · 32 g,Muratkin packet 2024,,&#10;Iron Age oil lamp,IA-2024.07,c.300 BCE,Levant,Terracotta,84 mm dia,Private collection,,"></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button type="button" class="secondary" id="csvParse">Parse CSV</button>
+          <button type="button" class="ghost" id="csvSample">Load sample</button>
+        </div>
+        <div id="csvStatus" class="help" style="margin-top:6px;"></div>
+      </fieldset>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="btnPdfTag" type="button">PDF · 1⅝″ tag</button>
+      <button class="primary" id="btnPdfSheet" type="button">PDF · 6×4 sheet (3×2)</button>
+      <button class="primary" id="btnPdfCard" type="button">PDF · 6×4 card</button>
+      <button class="secondary" id="btnPng" type="button">PNG</button>
+      <button class="secondary" id="btnDocx" type="button">DOCX</button>
+    </div>
+  </section>
+
+  <section class="panel preview-panel">
+    <div class="preview-controls">
+      <div class="seg" id="viewSeg">
+        <button data-v="tag" class="active" type="button">1⅝″ tag</button>
+        <button data-v="sheet" type="button">6×4 sheet · 3×2</button>
+        <button data-v="card" type="button">6×4 card</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);">Live preview at 100% size</div>
+    </div>
+    <div class="stage preview-stage-single" id="stageSingle"></div>
+    <div class="stage preview-stage-batch" id="stageBatch" style="flex-direction:column;gap:18px;"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+
+const TEMPLATES = {
+  artifact: { accent: '#2c3e50', defaults: {} },
+  coin:     { accent: '#1d1d1b', defaults: {} },
+  sacred:   { accent: '#b8860b', defaults: {} },
+  militaria:{ accent: '#556b2f', defaults: {} },
+  custom:   { accent: '#1d1d1b', defaults: {} },
+};
+
+const FIELDS = ['name','name2','catalog','period','origin','material','dimensions','acquisition','notes','qr','accent'];
+
+const state = {
+  view: 'tag',
+  template: 'artifact',
+  bilingual: false,
+  catalogCorner: true,
+  photo: '', // dataURL
+  batch: null, // array of records when in batch mode
+};
+
+// --- Form binding ---
+function readForm() {
+  const data = {};
+  FIELDS.forEach(f => { const el = $('#'+f); if (el) data[f] = el.value; });
+  data.template = $('#template').value;
+  data.bilingual = $('#bilingual').checked;
+  data.catalogCorner = $('#catalogCorner').checked;
+  data.photo = state.photo;
+  return data;
+}
+function writeForm(d) {
+  FIELDS.forEach(f => { if (d[f] !== undefined) { const el = $('#'+f); if (el) el.value = d[f]; } });
+  if (d.template) $('#template').value = d.template;
+  if (d.bilingual !== undefined) $('#bilingual').checked = !!d.bilingual;
+  if (d.catalogCorner !== undefined) $('#catalogCorner').checked = !!d.catalogCorner;
+  if (d.photo) { state.photo = d.photo; updatePhotoThumb(); }
+  render();
+}
+
+function updatePhotoThumb() {
+  const t = $('#photoThumb');
+  if (state.photo) t.style.backgroundImage = `url(${state.photo})`;
+  else t.style.backgroundImage = '';
+}
+
+// --- Render helpers ---
+async function makeQrDataUrl(text, sizePx) {
+  if (!text) return '';
+  try {
+    return await QRCode.toDataURL(text, {
+      errorCorrectionLevel: 'M',
+      margin: 0,
+      width: sizePx,
+      color: { dark: '#1d1d1bff', light: '#ffffffff' },
+    });
+  } catch(e) { return ''; }
+}
+
+async function renderTag(d, opts={}) {
+  // 1.625" small tag DOM
+  const el = document.createElement('div');
+  el.className = 'tag-1625 tpl-' + (d.template || 'artifact');
+  el.style.setProperty('--accent', d.accent || '#1d1d1b');
+  if (d.qr) el.classList.add('has-qr');
+  if (d.bilingual && d.name2) el.classList.add('bilingual');
+
+  const stripe = document.createElement('div');
+  stripe.className = 'stripe';
+  el.appendChild(stripe);
+
+  if (d.bilingual && d.name2) {
+    const split = document.createElement('div');
+    split.className = 'split';
+    const colA = document.createElement('div'); colA.className = 'col';
+    const colB = document.createElement('div'); colB.className = 'col';
+    const div = document.createElement('div'); div.className = 'divider';
+    colA.innerHTML = `<div class="name">${esc(d.name)}</div>` + miniMeta(d);
+    colB.innerHTML = `<div class="name">${esc(d.name2)}</div>` + miniMeta(d);
+    split.appendChild(colA); split.appendChild(div); split.appendChild(colB);
+    el.appendChild(split);
+  } else {
+    const name = document.createElement('div'); name.className='name'; name.textContent = d.name || ''; el.appendChild(name);
+    if (d.name2) { const n2 = document.createElement('div'); n2.className='name-2'; n2.textContent = d.name2; el.appendChild(n2); }
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = [
+      d.period && `<div>${esc(d.period)}</div>`,
+      d.origin && `<div>${esc(d.origin)}</div>`,
+      d.material && `<div>${esc(d.material)}</div>`,
+      d.dimensions && `<div>${esc(d.dimensions)}</div>`,
+    ].filter(Boolean).join('');
+    el.appendChild(meta);
+  }
+
+  if (d.qr) {
+    const qrDiv = document.createElement('div');
+    qrDiv.className = 'qr';
+    const url = await makeQrDataUrl(d.qr, 160);
+    if (url) qrDiv.innerHTML = `<img src="${url}">`;
+    el.appendChild(qrDiv);
+  }
+  if (d.catalog && d.catalogCorner !== false) {
+    const cat = document.createElement('div'); cat.className='catalog'; cat.textContent = d.catalog; el.appendChild(cat);
+  } else if (d.catalog) {
+    // fold into meta if not corner
+    const m = el.querySelector('.meta');
+    if (m) {
+      const c = document.createElement('div'); c.textContent = d.catalog; c.style.marginTop = '0.04in';
+      m.appendChild(c);
+    }
+  }
+  return el;
+}
+
+function miniMeta(d) {
+  const parts = [d.period, d.material, d.dimensions].filter(Boolean).map(esc);
+  return parts.length ? `<div class="meta">${parts.map(p => `<div>${p}</div>`).join('')}</div>` : '';
+}
+
+async function renderCard(d) {
+  const el = document.createElement('div');
+  el.className = 'card-6x4 tpl-' + (d.template || 'artifact');
+  el.style.setProperty('--accent', d.accent || '#1d1d1b');
+  const hasPhoto = !!d.photo;
+  const isBi = d.bilingual && d.name2;
+  if (hasPhoto && !isBi) el.classList.add('with-photo');
+  if (isBi) el.classList.add('bilingual');
+
+  const stripe = document.createElement('div'); stripe.className='stripe-v'; el.appendChild(stripe);
+
+  if (isBi) {
+    const colA = document.createElement('div'); colA.className='col';
+    const colB = document.createElement('div'); colB.className='col';
+    colA.innerHTML = cardInnerHTML({ ...d, _name: d.name });
+    colB.innerHTML = cardInnerHTML({ ...d, _name: d.name2 });
+    el.appendChild(colA); el.appendChild(colB);
+  } else {
+    if (hasPhoto) {
+      const photo = document.createElement('div'); photo.className='photo-slot';
+      photo.innerHTML = `<img src="${d.photo}">`;
+      el.appendChild(photo);
+    }
+    const body = document.createElement('div');
+    body.innerHTML = cardInnerHTML({ ...d, _name: d.name });
+    while (body.firstChild) el.appendChild(body.firstChild);
+  }
+
+  // footer (catalog + qr)
+  const footer = document.createElement('div'); footer.className='footer-row';
+  const left = document.createElement('div'); left.textContent = d.catalog || '';
+  const mid = document.createElement('div');
+  mid.textContent = d.acquisition ? '— ' + d.acquisition + ' —' : '';
+  mid.style.fontStyle = 'italic'; mid.style.fontFamily = 'serif';
+  const right = document.createElement('div');
+  if (d.qr) {
+    const url = await makeQrDataUrl(d.qr, 200);
+    right.className = 'qr';
+    if (url) right.innerHTML = `<img src="${url}">`;
+  }
+  footer.appendChild(left); footer.appendChild(mid); footer.appendChild(right);
+  el.appendChild(footer);
+
+  return el;
+}
+
+function cardInnerHTML(d) {
+  return `
+    <div class="name">${esc(d._name || d.name)}</div>
+    ${d.name2 && !d.bilingual ? `<div class="name-2">${esc(d.name2)}</div>` : ''}
+    <div class="accent-rule"></div>
+    <div class="meta">
+      <div class="row2">
+        ${d.period ? `<div><b>Date</b> ${esc(d.period)}</div>` : ''}
+        ${d.origin ? `<div><b>Provenance</b> ${esc(d.origin)}</div>` : ''}
+        ${d.material ? `<div><b>Material</b> ${esc(d.material)}</div>` : ''}
+        ${d.dimensions ? `<div><b>Dimensions</b> ${esc(d.dimensions)}</div>` : ''}
+      </div>
+    </div>
+    ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}
+  `;
+}
+
+async function renderSheet(d, n=6) {
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-6x4';
+  for (let i = 0; i < n; i++) {
+    const cell = document.createElement('div'); cell.className='cell';
+    const tag = await renderTag(d);
+    cell.appendChild(tag);
+    sheet.appendChild(cell);
+  }
+  return sheet;
+}
+
+async function renderBatchSheet(records) {
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-6x4';
+  for (let i = 0; i < 6; i++) {
+    const cell = document.createElement('div'); cell.className='cell';
+    if (records[i]) {
+      const tag = await renderTag(records[i]);
+      cell.appendChild(tag);
+    }
+    sheet.appendChild(cell);
+  }
+  return sheet;
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// --- Main render dispatcher ---
+async function render() {
+  const d = readForm();
+  // Apply template tweaks
+  d.accent = d.accent || TEMPLATES[d.template]?.accent || '#1d1d1b';
+
+  if (state.batch) {
+    renderBatchPreview(state.batch);
+    return;
+  }
+  const stage = $('#stageSingle');
+  stage.innerHTML = '';
+  let node;
+  if (state.view === 'tag') node = await renderTag(d);
+  else if (state.view === 'sheet') node = await renderSheet(d, 6);
+  else if (state.view === 'card') node = await renderCard(d);
+  if (node) stage.appendChild(node);
+}
+
+async function renderBatchPreview(records) {
+  const stage = $('#stageBatch');
+  stage.innerHTML = '';
+  // group into sheets of 6
+  const formAccent = $('#accent').value;
+  const tpl = $('#template').value;
+  const enriched = records.map(r => ({ ...r, accent: r.accent || formAccent, template: r.template || tpl }));
+  const totalSheets = Math.ceil(enriched.length / 6);
+  for (let s = 0; s < totalSheets; s++) {
+    const slice = enriched.slice(s*6, s*6+6);
+    const sheet = await renderBatchSheet(slice);
+    stage.appendChild(sheet);
+  }
+  if (!enriched.length) {
+    stage.innerHTML = '<div style="color:var(--muted);padding:40px;">No records parsed.</div>';
+  }
+}
+
+// --- Export ---
+async function captureNode(node, scale=4) {
+  // ensure node is in the DOM (offscreen) for accurate layout
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;';
+  holder.appendChild(node);
+  document.body.appendChild(holder);
+  try {
+    const canvas = await html2canvas(node, {
+      scale, backgroundColor: '#ffffff', useCORS: true, logging: false,
+    });
+    return canvas;
+  } finally { holder.remove(); }
+}
+
+async function exportPdf(kind) {
+  const { jsPDF } = window.jspdf;
+  const d = readForm();
+  d.accent = d.accent || TEMPLATES[d.template]?.accent || '#1d1d1b';
+
+  if (kind === 'tag') {
+    const node = await renderTag(d);
+    const canvas = await captureNode(node, 5);
+    const pdf = new jsPDF({ unit: 'in', format: [1.625, 1.625], orientation: 'portrait' });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 1.625, 1.625, undefined, 'FAST');
+    pdf.save(filename(d, 'tag') + '.pdf');
+  } else if (kind === 'sheet') {
+    const records = state.batch || [d];
+    const totalSheets = Math.ceil(records.length / 6) || 1;
+    const pdf = new jsPDF({ unit: 'in', format: [6, 4], orientation: 'landscape' });
+    for (let s = 0; s < totalSheets; s++) {
+      if (s > 0) pdf.addPage([6,4], 'landscape');
+      const slice = records.slice(s*6, s*6+6);
+      while (slice.length < 6) slice.push(null);
+      // place each tag at its grid cell
+      for (let i = 0; i < 6; i++) {
+        const rec = slice[i];
+        if (!rec) continue;
+        const merged = { ...rec, accent: rec.accent || d.accent, template: rec.template || d.template, bilingual: d.bilingual, catalogCorner: d.catalogCorner };
+        const node = await renderTag(merged);
+        const canvas = await captureNode(node, 5);
+        const col = i % 3, row = Math.floor(i / 3);
+        const cellW = 2, cellH = 2;
+        const cx = col * cellW + (cellW - 1.625)/2;
+        const cy = row * cellH + (cellH - 1.625)/2;
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', cx, cy, 1.625, 1.625, undefined, 'FAST');
+        // crop marks
+        pdf.setLineWidth(0.005); pdf.setDrawColor(180);
+        const m = 0.05;
+        [[cx, cy],[cx+1.625, cy],[cx, cy+1.625],[cx+1.625, cy+1.625]].forEach(([x,y]) => {
+          pdf.line(x-m, y, x+m, y); pdf.line(x, y-m, x, y+m);
+        });
+      }
+    }
+    pdf.save(filename(d, 'sheet') + '.pdf');
+  } else if (kind === 'card') {
+    const node = await renderCard(d);
+    const canvas = await captureNode(node, 4);
+    const pdf = new jsPDF({ unit: 'in', format: [6, 4], orientation: 'landscape' });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 6, 4, undefined, 'FAST');
+    pdf.save(filename(d, 'card') + '.pdf');
+  }
+  saveHistory(d);
+  toast('PDF saved.');
+}
+
+async function exportPng() {
+  const d = readForm();
+  let node;
+  if (state.view === 'tag') node = await renderTag(d);
+  else if (state.view === 'sheet') node = await renderSheet(d, 6);
+  else node = await renderCard(d);
+  const canvas = await captureNode(node, 4);
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = filename(d, state.view) + '.png';
+  a.click();
+  saveHistory(d);
+  toast('PNG saved.');
+}
+
+function exportDocx() {
+  const d = readForm();
+  // Minimal Word-readable HTML wrapped as .doc (Word opens this).
+  const accent = d.accent || '#1d1d1b';
+  const html = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset="utf-8"><title>${esc(d.name||'tag')}</title>
+<style>
+  @page { size: 6in 4in; margin: 0.3in; }
+  body { font-family: 'Palatino Linotype', Georgia, serif; }
+  .name { font-size: 22pt; font-weight: 600; text-align: center; }
+  .name2 { font-size: 12pt; font-style: italic; text-align: center; color: #5a554d; }
+  .rule { width: 1.2in; height: 2px; background: ${accent}; margin: 8pt auto; }
+  .meta { font-family: Arial, sans-serif; font-size: 10pt; text-align: center; }
+  .meta b { color: #6b6760; letter-spacing: 0.1em; text-transform: uppercase; font-size: 9pt; }
+  .notes { font-style: italic; font-size: 10pt; text-align: center; margin-top: 10pt; }
+  .footer { font-family: Arial, sans-serif; font-size: 9pt; color: #6b6760; margin-top: 18pt; display: flex; justify-content: space-between; }
+</style></head>
+<body>
+  <div class="name">${esc(d.name)}</div>
+  ${d.name2 ? `<div class="name2">${esc(d.name2)}</div>` : ''}
+  <div class="rule"></div>
+  <div class="meta">
+    ${d.period ? `<div><b>Date</b> ${esc(d.period)}</div>` : ''}
+    ${d.origin ? `<div><b>Provenance</b> ${esc(d.origin)}</div>` : ''}
+    ${d.material ? `<div><b>Material</b> ${esc(d.material)}</div>` : ''}
+    ${d.dimensions ? `<div><b>Dimensions</b> ${esc(d.dimensions)}</div>` : ''}
+  </div>
+  ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}
+  <div class="footer"><span>${esc(d.catalog||'')}</span><span style="font-style:italic;">${esc(d.acquisition||'')}</span></div>
+</body></html>`;
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename(d, 'card') + '.doc';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  saveHistory(d);
+  toast('DOCX saved.');
+}
+
+function filename(d, kind) {
+  const base = (d.catalog || d.name || 'exhibit-tag').replace(/[^A-Za-z0-9_\-]+/g,'-').slice(0, 60);
+  return `${base}-${kind}`;
+}
+
+// --- History ---
+const HKEY = 'etg.history.v1';
+const TKEY = 'etg.templates.v1';
+
+function saveHistory(d) {
+  const list = JSON.parse(localStorage.getItem(HKEY) || '[]');
+  list.unshift({ ...d, _ts: Date.now() });
+  const dedup = [];
+  const seen = new Set();
+  for (const x of list) {
+    const key = (x.catalog||'') + '|' + (x.name||'');
+    if (seen.has(key)) continue;
+    seen.add(key); dedup.push(x);
+    if (dedup.length >= 5) break;
+  }
+  localStorage.setItem(HKEY, JSON.stringify(dedup));
+  renderHistory();
+}
+function renderHistory() {
+  const list = JSON.parse(localStorage.getItem(HKEY) || '[]');
+  const root = $('#historyList');
+  if (!list.length) { root.innerHTML = '<div class="help" style="margin:0;">Nothing saved yet.</div>'; return; }
+  root.innerHTML = '';
+  list.forEach((d, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `${d.name || '(untitled)'} · ${d.catalog || '—'}`;
+    b.onclick = () => writeForm(d);
+    root.appendChild(b);
+  });
+}
+function renderTemplates() {
+  const list = JSON.parse(localStorage.getItem(TKEY) || '[]');
+  const root = $('#tplList');
+  root.innerHTML = '';
+  if (!list.length) { root.innerHTML = '<div class="help" style="margin:0;">No saved templates.</div>'; return; }
+  list.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = t._name;
+    b.onclick = () => writeForm(t);
+    const x = document.createElement('span');
+    x.textContent = ' ✕'; x.style.cssText='float:right;color:var(--warn);cursor:pointer;';
+    x.onclick = (e) => { e.stopPropagation(); list.splice(i,1); localStorage.setItem(TKEY, JSON.stringify(list)); renderTemplates(); };
+    b.appendChild(x);
+    root.appendChild(b);
+  });
+}
+
+// --- CSV / batch ---
+function parseCsv() {
+  const text = $('#csv').value.trim();
+  if (!text) { state.batch = null; $('#csvStatus').textContent = 'No data.'; render(); return; }
+  // Try commas first; if a single column results, retry with tabs.
+  let res = Papa.parse(text, { header: true, skipEmptyLines: true });
+  if (res.meta && res.meta.fields && res.meta.fields.length === 1) {
+    res = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: '\t' });
+  }
+  const rows = (res.data || []).filter(r => Object.values(r).some(v => v && String(v).trim()));
+  state.batch = rows.map(r => ({
+    name: r.name || r.Name || '',
+    name2: r.name2 || r['Name (RU)'] || '',
+    catalog: r.catalog || r.Catalog || r.id || '',
+    period: r.period || r.Period || r.date || '',
+    origin: r.origin || r.Origin || r.provenance || '',
+    material: r.material || r.Material || '',
+    dimensions: r.dimensions || r.Dimensions || r.size || '',
+    acquisition: r.acquisition || r.Acquisition || r.source || '',
+    notes: r.notes || r.Notes || '',
+    qr: r.qr || r.url || r.URL || '',
+  }));
+  $('#csvStatus').textContent = `Parsed ${state.batch.length} record(s) → ${Math.ceil(state.batch.length/6)} sheet(s) of 3×2.`;
+  render();
+}
+
+function loadCsvSample() {
+  $('#csv').value = `name,name2,catalog,period,origin,material,dimensions,acquisition,notes,qr
+Bronze trade weight,Гиря бронзовая,MUR-2024.118,c. 950–1050 CE,Volga Bulgar,Bronze,22×18×14 mm · 32 g,Muratkin packet 2024,,https://archive.example.org/MUR-2024.118
+Iron Age oil lamp,,IA-2024.07,c. 300 BCE,Levant,Terracotta,84 mm dia,Private collection,Wheel-thrown; soot residue,
+Roman bronze coin,Follis,COIN-2025.003,c. 307 CE,Trier mint,Bronze,21 mm · 6.4 g,Auction lot 2025,,
+Tibetan votive plaque,སྐུ་འདྲ་,SAC-2024.041,18th c.,Eastern Tibet,Gilded copper,11 × 8 cm,Estate gift,Warm-tone treatment,
+WWII field compass,,MIL-2024.220,1942,USA,Brass + glass,55 mm dia,Veteran family donation,US Corps issue,
+Neolithic flint scraper,,FLT-2023.099,c. 6000 BCE,Anatolia,Flint,42 × 28 × 9 mm,Survey collection,,`;
+}
+
+// --- Photo upload ---
+$('#photo').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { state.photo = r.result; updatePhotoThumb(); render(); };
+  r.readAsDataURL(f);
+});
+$('#photoClear').addEventListener('click', () => { state.photo = ''; $('#photo').value=''; updatePhotoThumb(); render(); });
+
+// --- Wire up controls ---
+FIELDS.forEach(f => { const el = $('#'+f); if (el) el.addEventListener('input', render); });
+$('#bilingual').addEventListener('change', render);
+$('#catalogCorner').addEventListener('change', render);
+$('#template').addEventListener('change', () => {
+  const t = TEMPLATES[$('#template').value];
+  if (t && t.accent) $('#accent').value = t.accent;
+  render();
+});
+$$('#swatches button').forEach(b => b.addEventListener('click', () => {
+  $('#accent').value = b.dataset.c; render();
+}));
+$$('#viewSeg button').forEach(b => b.addEventListener('click', () => {
+  $$('#viewSeg button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.view = b.dataset.v; render();
+}));
+$('#tab-single').addEventListener('click', () => {
+  document.body.classList.remove('batch-mode');
+  $('#tab-single').classList.add('active'); $('#tab-batch').classList.remove('active');
+  state.batch = null; render();
+});
+$('#tab-batch').addEventListener('click', () => {
+  document.body.classList.add('batch-mode');
+  $('#tab-batch').classList.add('active'); $('#tab-single').classList.remove('active');
+  parseCsv();
+});
+
+$('#csvParse').addEventListener('click', parseCsv);
+$('#csvSample').addEventListener('click', () => { loadCsvSample(); parseCsv(); });
+
+$('#btnPdfTag').addEventListener('click', () => exportPdf('tag').catch(err => { console.error(err); toast('Export failed: ' + err.message); }));
+$('#btnPdfSheet').addEventListener('click', () => exportPdf('sheet').catch(err => { console.error(err); toast('Export failed: ' + err.message); }));
+$('#btnPdfCard').addEventListener('click', () => exportPdf('card').catch(err => { console.error(err); toast('Export failed: ' + err.message); }));
+$('#btnPng').addEventListener('click', () => exportPng().catch(err => { console.error(err); toast('Export failed: ' + err.message); }));
+$('#btnDocx').addEventListener('click', exportDocx);
+
+$('#tplSave').addEventListener('click', () => {
+  const name = $('#tplName').value.trim();
+  if (!name) { toast('Name your template first.'); return; }
+  const list = JSON.parse(localStorage.getItem(TKEY) || '[]');
+  list.unshift({ ...readForm(), _name: name });
+  localStorage.setItem(TKEY, JSON.stringify(list.slice(0,20)));
+  $('#tplName').value = '';
+  renderTemplates();
+  toast('Template saved.');
+});
+
+// --- Toast ---
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// --- Init ---
+function seedDefaults() {
+  if ($('#name').value) return;
+  $('#name').value = 'Bronze trade weight';
+  $('#name2').value = 'Гиря бронзовая';
+  $('#catalog').value = 'MUR-2024.118';
+  $('#period').value = 'c. 950–1050 CE';
+  $('#origin').value = 'Volga Bulgar region';
+  $('#material').value = 'Bronze';
+  $('#dimensions').value = '22 × 18 × 14 mm · 32 g';
+  $('#acquisition').value = 'Muratkin packet, 2024';
+  $('#notes').value = 'Cubo-octahedral; surviving stamp on one face.';
+  $('#accent').value = '#7a4a1f';
+}
+
+seedDefaults();
+renderHistory();
+renderTemplates();
+render();
+
+})();
+</script>
+</body>
+</html>
